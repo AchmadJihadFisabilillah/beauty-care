@@ -1,15 +1,10 @@
 <?php
+use App\Controllers\CartController;
+
 $title = 'Product Detail';
 $slug = $_GET['slug'] ?? '';
 
-$stmt = $pdo->prepare("
-    SELECT p.*, b.name AS brand_name, c.name AS category_name
-    FROM products p
-    JOIN brands b ON b.id = p.brand_id
-    JOIN categories c ON c.id = p.category_id
-    WHERE p.slug = ?
-    LIMIT 1
-");
+$stmt = $pdo->prepare("\n    SELECT p.*, b.name AS brand_name, c.name AS category_name\n    FROM products p\n    JOIN brands b ON b.id = p.brand_id\n    JOIN categories c ON c.id = p.category_id\n    WHERE p.slug = ?\n    LIMIT 1\n");
 $stmt->execute([$slug]);
 $product = $stmt->fetch();
 
@@ -22,28 +17,20 @@ $galleryStmt->execute([$product['id']]);
 $gallery = $galleryStmt->fetchAll();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_login();
     verify_csrf();
     $qty = max(1, (int) ($_POST['qty'] ?? 1));
 
-    if (!isset($_SESSION['cart'])) {
-        $_SESSION['cart'] = [];
+    if ($qty > (int) $product['stock']) {
+        $qty = (int) $product['stock'];
     }
 
-    $id = (int) $product['id'];
-
-    if (isset($_SESSION['cart'][$id])) {
-        $_SESSION['cart'][$id]['qty'] += $qty;
-    } else {
-        $_SESSION['cart'][$id] = [
-            'id' => $id,
-            'name' => $product['name'],
-            'price' => (float) $product['price'],
-            'qty' => $qty,
-            'stock' => (int) $product['stock'],
-            'image' => $product['image'],
-        ];
+    if ($qty <= 0) {
+        flash('error', 'Stok produk tidak tersedia.');
+        redirect('/product?slug=' . urlencode($slug));
     }
 
+    (new CartController())->add($pdo, $product, $qty);
     flash('success', 'Produk ditambahkan ke keranjang.');
     redirect('/cart');
 }
@@ -73,11 +60,15 @@ require BASE_PATH . '/views/layouts/header.php';
         <strong><?= rupiah($product['price']) ?></strong>
         <div class="desc-box"><?= nl2br(e($product['description'])) ?></div>
 
-        <form method="post" class="inline-form">
-            <?= csrf_input() ?>
-            <input type="number" name="qty" min="1" value="1">
-            <button class="btn">Tambah ke Keranjang</button>
-        </form>
+        <?php if (is_logged_in()): ?>
+            <form method="post" class="inline-form">
+                <?= csrf_input() ?>
+                <input type="number" name="qty" min="1" max="<?= (int) $product['stock'] ?>" value="1">
+                <button class="btn">Tambah ke Keranjang</button>
+            </form>
+        <?php else: ?>
+            <p><a class="btn" href="<?= BASE_URL ?>/login">Login untuk membeli</a></p>
+        <?php endif; ?>
     </div>
 </div>
 <?php require BASE_PATH . '/views/layouts/footer.php'; ?>

@@ -1,7 +1,23 @@
 <?php
+use App\Models\Cart;
+use App\Models\CartItem;
+
 $title = 'Checkout';
 require_login();
-if (empty($_SESSION['cart'])) redirect('/cart');
+
+$cartModel = new Cart($pdo);
+$cartItemModel = new CartItem($pdo);
+$cart = $cartModel->findByUser(current_user_id());
+if (!$cart) {
+    flash('error', 'Keranjang kamu masih kosong.');
+    redirect('/cart');
+}
+
+$items = $cartItemModel->byCart((int) $cart['id']);
+if (!$items) {
+    flash('error', 'Keranjang kamu masih kosong.');
+    redirect('/cart');
+}
 
 $addressStmt = $pdo->prepare('SELECT * FROM addresses WHERE user_id = ? ORDER BY is_default DESC, id DESC');
 $addressStmt->execute([current_user_id()]);
@@ -20,17 +36,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $shippingId = (int) ($_POST['shipping_id'] ?? 0);
     $notes = trim($_POST['notes'] ?? '');
 
+    $addressStmt = $pdo->prepare('SELECT * FROM addresses WHERE id = ? AND user_id = ? LIMIT 1');
+    $addressStmt->execute([$addressId, current_user_id()]);
+    $address = $addressStmt->fetch();
+    if (!$address) {
+        die('Alamat tidak valid.');
+    }
+
     $stmt = $pdo->prepare('SELECT * FROM shipping_rates WHERE id = ? AND is_active = 1 LIMIT 1');
     $stmt->execute([$shippingId]);
     $shipping = $stmt->fetch();
-    if (!$shipping) die('Ongkir tidak valid.');
+    if (!$shipping) {
+        die('Ongkir tidak valid.');
+    }
 
-    foreach ($_SESSION['cart'] as $cartItem) {
-        $stockStmt = $pdo->prepare('SELECT stock FROM products WHERE id = ? LIMIT 1');
-        $stockStmt->execute([$cartItem['id']]);
+    foreach ($items as $cartItem) {
+        $stockStmt = $pdo->prepare('SELECT stock, is_active FROM products WHERE id = ? LIMIT 1');
+        $stockStmt->execute([$cartItem['product_id']]);
         $dbProduct = $stockStmt->fetch();
 
-        if (!$dbProduct || (int) $dbProduct['stock'] < (int) $cartItem['qty']) {
+        if (!$dbProduct || (int) $dbProduct['is_active'] !== 1 || (int) $dbProduct['stock'] < (int) $cartItem['qty']) {
             flash('error', 'Checkout dibatalkan karena stok salah satu produk tidak mencukupi.');
             redirect('/cart');
         }
@@ -42,25 +67,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $pdo->beginTransaction();
     try {
-        $orderStmt = $pdo->prepare('INSERT INTO orders(order_code,user_id,address_id,subtotal,shipping_cost,total,payment_method,payment_status,order_status,notes) VALUES(?,?,?,?,?,?,?,?,?,?)');
-        $orderStmt->execute([$orderCode, current_user_id(), $addressId, $subtotal, $shippingCost, $total, 'bank_transfer', 'pending', 'new', $notes]);
-        $orderId = $pdo->lastInsertId();
+        $orderStmt = $pdo->prepare('INSERT INTO orders(order_code,user_id,address_id,recipient_name_snapshot,phone_snapshot,address_line_snapshot,city_snapshot,province_snapshot,postal_code_snapshot,subtotal,shipping_cost,total,payment_method,payment_status,order_status,notes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+        $orderStmt->execute([
+            $orderCode,
+            current_user_id(),
+            $addressId,
+            $address['recipient_name'],
+            $address['phone'],
+            $address['address_line'],
+            $address['city'],
+            $address['province'],
+            $address['postal_code'],
+            $subtotal,
+            $shippingCost,
+            $total,
+            'bank_transfer',
+            'pending',
+            'new',
+            $notes,
+        ]);
+        $orderId = (int) $pdo->lastInsertId();
 
         $itemStmt = $pdo->prepare('INSERT INTO order_items(order_id,product_id,product_name,product_price,qty,line_total) VALUES(?,?,?,?,?,?)');
         $stockStmt = $pdo->prepare('UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?');
+        $movementStmt = $pdo->prepare("INSERT INTO stock_movements(product_id, movement_type, qty, note, created_by) VALUES(?, 'out', ?, ?, ?)");
 
-        foreach ($_SESSION['cart'] as $item) {
-            $lineTotal = $item['price'] * $item['qty'];
-            $itemStmt->execute([$orderId, $item['id'], $item['name'], $item['price'], $item['qty'], $lineTotal]);
-            $stockStmt->execute([$item['qty'], $item['id'], $item['qty']]);
+        foreach ($items as $item) {
+            $lineTotal = (float) $item['price_at_added'] * (int) $item['qty'];
+            $itemStmt->execute([$orderId, $item['product_id'], $item['name'], $item['price_at_added'], $item['qty'], $lineTotal]);
+            $stockStmt->execute([$item['qty'], $item['product_id'], $item['qty']]);
 
             if ($stockStmt->rowCount() === 0) {
                 throw new RuntimeException('Stok gagal diperbarui.');
             }
+
+            $movementStmt->execute([
+                $item['product_id'],
+                $item['qty'],
+                'Pengurangan stok otomatis untuk order ' . $orderCode,
+                current_user_id(),
+            ]);
         }
 
+        $cartModel->clear((int) $cart['id']);
         $pdo->commit();
-        unset($_SESSION['cart']);
         flash('success', 'Checkout berhasil. Silakan lakukan pembayaran.');
         redirect('/user/order-detail?id=' . $orderId);
     } catch (Throwable $e) {
@@ -91,6 +141,24 @@ require BASE_PATH . '/views/layouts/header.php';
     <label>Catatan
         <textarea name="notes"></textarea>
     </label>
+
+    <div class="card" style="background:#fafafa;">
+        <h3>Ringkasan Belanja</h3>
+        <table class="table">
+            <thead><tr><th>Produk</th><th>Qty</th><th>Harga</th><th>Total</th></tr></thead>
+            <tbody>
+                <?php foreach ($items as $item): ?>
+                    <tr>
+                        <td><?= e($item['name']) ?></td>
+                        <td><?= (int) $item['qty'] ?></td>
+                        <td><?= rupiah($item['price_at_added']) ?></td>
+                        <td><?= rupiah($item['line_total']) ?></td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+
     <p>Subtotal: <strong><?= rupiah($subtotal) ?></strong></p>
     <button class="btn">Buat Pesanan</button>
 </form>

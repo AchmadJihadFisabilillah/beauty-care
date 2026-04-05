@@ -1,16 +1,15 @@
 <?php
 require_login();
+
 use App\Services\InvoiceService;
 
 $id = (int)($_GET['id'] ?? 0);
-$stmt = $pdo->prepare("SELECT o.*, u.name AS customer_name, a.recipient_name, a.phone, a.address_line, a.city, a.province, a.postal_code
-    FROM orders o
-    JOIN users u ON u.id = o.user_id
-    JOIN addresses a ON a.id = o.address_id
-    WHERE o.id = ? AND o.user_id = ? LIMIT 1");
+$stmt = $pdo->prepare("\n    SELECT o.*,\n           u.name AS customer_name,\n           COALESCE(o.recipient_name_snapshot, a.recipient_name) AS recipient_name,\n           COALESCE(o.phone_snapshot, a.phone) AS phone,\n           COALESCE(o.address_line_snapshot, a.address_line) AS address_line,\n           COALESCE(o.city_snapshot, a.city) AS city,\n           COALESCE(o.province_snapshot, a.province) AS province,\n           COALESCE(o.postal_code_snapshot, a.postal_code) AS postal_code\n    FROM orders o\n    JOIN users u ON u.id = o.user_id\n    LEFT JOIN addresses a ON a.id = o.address_id\n    WHERE o.id = ? AND o.user_id = ? LIMIT 1\n");
 $stmt->execute([$id, current_user_id()]);
 $order = $stmt->fetch();
 if (!$order) die('Invoice tidak ditemukan.');
+
+$invoice = InvoiceService::ensureExists($pdo, $order);
 
 $itemStmt = $pdo->prepare('SELECT * FROM order_items WHERE order_id = ?');
 $itemStmt->execute([$id]);
@@ -26,7 +25,7 @@ body{font-family:DejaVu Sans,sans-serif;font-size:12px;} table{width:100%;border
 </head>
 <body>
 <h1>INVOICE</h1>
-<p><?= e($order['order_code']) ?></p>
+<p><?= e($invoice['invoice_number'] ?? $order['order_code']) ?></p>
 <p>Customer: <?= e($order['customer_name']) ?></p>
 <p>Penerima: <?= e($order['recipient_name']) ?> - <?= e($order['phone']) ?></p>
 <p>Alamat: <?= e($order['address_line']) ?>, <?= e($order['city']) ?>, <?= e($order['province']) ?> <?= e($order['postal_code']) ?></p>
@@ -52,4 +51,4 @@ body{font-family:DejaVu Sans,sans-serif;font-size:12px;} table{width:100%;border
 </html>
 <?php
 $html = ob_get_clean();
-InvoiceService::streamPdf($html, 'invoice-' . $order['order_code'] . '.pdf');
+InvoiceService::streamPdf($html, 'invoice-' . ($invoice['invoice_number'] ?? $order['order_code']) . '.pdf');

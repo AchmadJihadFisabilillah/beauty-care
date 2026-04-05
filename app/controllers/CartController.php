@@ -1,28 +1,24 @@
 <?php
 namespace App\Controllers;
 
+use App\Models\Cart;
+use App\Models\CartItem;
+use PDO;
+
 class CartController
 {
-    public function add(array $product, int $qty): void
+    public function add(PDO $pdo, array $product, int $qty): void
     {
-        if (!isset($_SESSION['cart'])) {
-            $_SESSION['cart'] = [];
+        if (empty($_SESSION['user']['id'])) {
+            flash('error', 'Silakan login terlebih dahulu untuk menambahkan produk ke keranjang.');
+            redirect('/login');
         }
 
-        $id = (int) $product['id'];
+        $cartModel = new Cart($pdo);
+        $cartItemModel = new CartItem($pdo);
+        $cart = $cartModel->getOrCreate((int) $_SESSION['user']['id']);
 
-        if (isset($_SESSION['cart'][$id])) {
-            $_SESSION['cart'][$id]['qty'] += $qty;
-            return;
-        }
-
-        $_SESSION['cart'][$id] = [
-            'id' => $id,
-            'name' => $product['name'],
-            'price' => (float) $product['price'],
-            'qty' => $qty,
-            'stock' => (int) $product['stock'],
-            'image' => $product['image'] ?? null,
-        ];
+        $qty = max(1, min($qty, (int) $product['stock']));
+        $cartItemModel->upsert((int) $cart['id'], $product, $qty);
     }
 }

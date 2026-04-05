@@ -1,6 +1,10 @@
 <?php
+use App\Controllers\PaymentController;
+
 $title = 'Payments';
 require_admin();
+
+$paymentController = new PaymentController();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
@@ -8,25 +12,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     $notes = trim($_POST['admin_notes'] ?? '');
 
-    $stmt = $pdo->prepare('SELECT * FROM payment_confirmations WHERE id = ? LIMIT 1');
-    $stmt->execute([$paymentId]);
-    $payment = $stmt->fetch();
-
-    if ($payment) {
+    if ($paymentId > 0) {
         if ($action === 'verify') {
-            $pdo->prepare("UPDATE payment_confirmations SET verification_status='verified', admin_notes=? WHERE id=?")->execute([$notes, $paymentId]);
-            $pdo->prepare("UPDATE orders SET payment_status='paid', order_status='processed' WHERE id=?")->execute([$payment['order_id']]);
+            $paymentController->verify($pdo, $paymentId, (int) current_user_id(), $notes);
+            admin_log('Verifikasi pembayaran', ['payment_id' => $paymentId, 'action' => 'verify']);
         }
         if ($action === 'reject') {
-            $pdo->prepare("UPDATE payment_confirmations SET verification_status='rejected', admin_notes=? WHERE id=?")->execute([$notes, $paymentId]);
-            $pdo->prepare("UPDATE orders SET payment_status='rejected' WHERE id=?")->execute([$payment['order_id']]);
+            $paymentController->reject($pdo, $paymentId, (int) current_user_id(), $notes);
+            admin_log('Tolak pembayaran', ['payment_id' => $paymentId, 'action' => 'reject']);
         }
     }
+
     flash('success', 'Status pembayaran diperbarui.');
     redirect('/admin/payments');
 }
 
-$list = $pdo->query("SELECT pc.*, o.order_code, o.total, u.name AS user_name FROM payment_confirmations pc JOIN orders o ON o.id = pc.order_id JOIN users u ON u.id = o.user_id ORDER BY pc.id DESC")->fetchAll();
+$list = $pdo->query("\n    SELECT pc.*,\n           o.order_code,\n           o.total,\n           u.name AS user_name,\n           admin.name AS verified_by_name\n    FROM payment_confirmations pc\n    JOIN orders o ON o.id = pc.order_id\n    JOIN users u ON u.id = o.user_id\n    LEFT JOIN users admin ON admin.id = pc.verified_by\n    ORDER BY pc.id DESC\n")->fetchAll();
 require BASE_PATH . '/views/layouts/admin_header.php';
 ?>
 <h1>Payment Verification</h1>
@@ -36,13 +37,22 @@ require BASE_PATH . '/views/layouts/admin_header.php';
         <p><strong><?= e($row['order_code']) ?></strong> - <?= e($row['user_name']) ?></p>
         <p>Jumlah: <?= rupiah($row['transfer_amount']) ?></p>
         <p>Status: <?= e($row['verification_status']) ?></p>
+        <?php if (!empty($row['admin_notes'])): ?>
+            <p><strong>Catatan:</strong> <?= nl2br(e($row['admin_notes'])) ?></p>
+        <?php endif; ?>
+        <?php if (!empty($row['verified_by_name'])): ?>
+            <p><strong>Diverifikasi oleh:</strong> <?= e($row['verified_by_name']) ?></p>
+        <?php endif; ?>
+        <?php if (!empty($row['verified_at'])): ?>
+            <p><strong>Waktu verifikasi:</strong> <?= e($row['verified_at']) ?></p>
+        <?php endif; ?>
         <?php if ($row['proof_image']): ?>
             <img class="proof-thumb" src="<?= BASE_URL ?>/uploads/payments/<?= e($row['proof_image']) ?>" alt="proof">
         <?php endif; ?>
         <form method="post" class="form-grid compact">
             <?= csrf_input() ?>
             <input type="hidden" name="payment_id" value="<?= $row['id'] ?>">
-            <textarea name="admin_notes" placeholder="Catatan admin"></textarea>
+            <textarea name="admin_notes" placeholder="Catatan admin"><?= e($row['admin_notes'] ?? '') ?></textarea>
             <div class="inline-form">
                 <button class="btn" name="action" value="verify">Verify</button>
                 <button class="btn btn-danger" name="action" value="reject">Reject</button>

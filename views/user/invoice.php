@@ -1,15 +1,15 @@
 <?php
+use App\Services\InvoiceService;
+
 $title = 'Invoice';
 require_login();
 $id = (int)($_GET['id'] ?? 0);
-$stmt = $pdo->prepare("SELECT o.*, u.name AS customer_name, a.recipient_name, a.phone, a.address_line, a.city, a.province, a.postal_code
-    FROM orders o
-    JOIN users u ON u.id = o.user_id
-    JOIN addresses a ON a.id = o.address_id
-    WHERE o.id = ? AND o.user_id = ? LIMIT 1");
+$stmt = $pdo->prepare("\n    SELECT o.*,\n           u.name AS customer_name,\n           COALESCE(o.recipient_name_snapshot, a.recipient_name) AS recipient_name,\n           COALESCE(o.phone_snapshot, a.phone) AS phone,\n           COALESCE(o.address_line_snapshot, a.address_line) AS address_line,\n           COALESCE(o.city_snapshot, a.city) AS city,\n           COALESCE(o.province_snapshot, a.province) AS province,\n           COALESCE(o.postal_code_snapshot, a.postal_code) AS postal_code\n    FROM orders o\n    JOIN users u ON u.id = o.user_id\n    LEFT JOIN addresses a ON a.id = o.address_id\n    WHERE o.id = ? AND o.user_id = ? LIMIT 1\n");
 $stmt->execute([$id, current_user_id()]);
 $order = $stmt->fetch();
 if (!$order) die('Invoice tidak ditemukan.');
+
+$invoice = InvoiceService::ensureExists($pdo, $order);
 
 $itemStmt = $pdo->prepare('SELECT * FROM order_items WHERE order_id = ?');
 $itemStmt->execute([$id]);
@@ -21,7 +21,7 @@ require BASE_PATH . '/views/layouts/header.php';
     <div class="invoice-head">
         <div>
             <h1>INVOICE</h1>
-            <p><?= e($order['order_code']) ?></p>
+            <p><?= e($invoice['invoice_number'] ?? $order['order_code']) ?></p>
         </div>
         <div>
             <a class="btn" href="<?= BASE_URL ?>/user/invoice-pdf?id=<?= $order['id'] ?>" target="_blank">Cetak PDF</a>

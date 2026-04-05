@@ -71,17 +71,14 @@ function slugify(string $text): string
 
 function cart_count(): int
 {
-    if (empty($_SESSION['cart'])) return 0;
-    return array_sum(array_column($_SESSION['cart'], 'qty'));
+    global $pdo;
+    return \App\Services\CartService::count($pdo ?? null, current_user_id());
 }
 
 function cart_subtotal(): float
 {
-    $subtotal = 0;
-    foreach ($_SESSION['cart'] ?? [] as $item) {
-        $subtotal += ((float) $item['price']) * ((int) $item['qty']);
-    }
-    return $subtotal;
+    global $pdo;
+    return \App\Services\CartService::subtotal($pdo ?? null, current_user_id());
 }
 
 function whatsapp_order_url(string $orderCode, float $total): string

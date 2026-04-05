@@ -1,46 +1,51 @@
 <?php
+use App\Models\Cart;
+use App\Models\CartItem;
+
 $title = 'Cart';
-if (!isset($_SESSION['cart'])) $_SESSION['cart'] = [];
+require_login();
+
+$cartModel = new Cart($pdo);
+$cartItemModel = new CartItem($pdo);
+$cart = $cartModel->getOrCreate(current_user_id());
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
     $action = $_POST['action'] ?? '';
-    $id = (int) ($_POST['id'] ?? 0);
+    $productId = (int) ($_POST['id'] ?? 0);
 
-    if ($action === 'update' && isset($_SESSION['cart'][$id])) {
-        $qty = max(1, (int) ($_POST['qty'] ?? 1));
+    $productStmt = $pdo->prepare('SELECT id, stock FROM products WHERE id = ? LIMIT 1');
+    $productStmt->execute([$productId]);
+    $product = $productStmt->fetch();
 
-        $stmt = $pdo->prepare('SELECT stock FROM products WHERE id = ? LIMIT 1');
-        $stmt->execute([$id]);
-        $product = $stmt->fetch();
-
+    if ($action === 'update') {
         if (!$product) {
-            unset($_SESSION['cart'][$id]);
+            $cartItemModel->remove((int) $cart['id'], $productId);
             flash('error', 'Produk tidak ditemukan dan dihapus dari keranjang.');
             redirect('/cart');
         }
 
+        $qty = max(1, (int) ($_POST['qty'] ?? 1));
         if ($qty > (int) $product['stock']) {
             $qty = (int) $product['stock'];
             flash('error', 'Jumlah melebihi stok tersedia. Qty disesuaikan.');
         }
 
         if ($qty <= 0) {
-            unset($_SESSION['cart'][$id]);
+            $cartItemModel->remove((int) $cart['id'], $productId);
         } else {
-            $_SESSION['cart'][$id]['qty'] = $qty;
-            $_SESSION['cart'][$id]['stock'] = (int) $product['stock'];
+            $cartItemModel->updateQty((int) $cart['id'], $productId, $qty, (int) $product['stock']);
         }
     }
 
     if ($action === 'remove') {
-        unset($_SESSION['cart'][$id]);
+        $cartItemModel->remove((int) $cart['id'], $productId);
     }
 
     redirect('/cart');
 }
 
-$items = $_SESSION['cart'];
+$items = $cartItemModel->byCart((int) $cart['id']);
 require BASE_PATH . '/views/layouts/header.php';
 ?>
 <h1 style="margin-bottom:18px;">Keranjang Belanja</h1>
@@ -59,22 +64,22 @@ require BASE_PATH . '/views/layouts/header.php';
             <?php foreach ($items as $item): ?>
                 <tr>
                     <td><?= e($item['name']) ?></td>
-                    <td><?= rupiah($item['price']) ?></td>
+                    <td><?= rupiah($item['price_at_added']) ?></td>
                     <td>
                         <form method="post" class="inline-form">
                             <?= csrf_input() ?>
                             <input type="hidden" name="action" value="update">
-                            <input type="hidden" name="id" value="<?= $item['id'] ?>">
-                            <input type="number" name="qty" min="1" max="<?= (int) ($item['stock'] ?? 9999) ?>" value="<?= $item['qty'] ?>">
+                            <input type="hidden" name="id" value="<?= (int) $item['product_id'] ?>">
+                            <input type="number" name="qty" min="1" max="<?= (int) ($item['stock'] ?? 9999) ?>" value="<?= (int) $item['qty'] ?>">
                             <button class="btn btn-sm">Update</button>
                         </form>
                     </td>
-                    <td><?= rupiah($item['price'] * $item['qty']) ?></td>
+                    <td><?= rupiah($item['line_total']) ?></td>
                     <td>
                         <form method="post">
                             <?= csrf_input() ?>
                             <input type="hidden" name="action" value="remove">
-                            <input type="hidden" name="id" value="<?= $item['id'] ?>">
+                            <input type="hidden" name="id" value="<?= (int) $item['product_id'] ?>">
                             <button class="btn btn-danger btn-sm">Hapus</button>
                         </form>
                     </td>

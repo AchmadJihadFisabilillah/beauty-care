@@ -1,24 +1,41 @@
 <?php
 namespace App\Services;
 
+use App\Models\Cart;
+use App\Models\CartItem;
+use PDO;
+
 class CartService
 {
-    public static function count(): int
+    public static function count(?PDO $pdo = null, ?int $userId = null): int
     {
-        if (empty($_SESSION['cart'])) {
+        if (!$pdo || !$userId) {
             return 0;
         }
 
-        return array_sum(array_column($_SESSION['cart'], 'qty'));
-    }
-
-    public static function subtotal(): float
-    {
-        $subtotal = 0;
-        foreach ($_SESSION['cart'] ?? [] as $item) {
-            $subtotal += $item['price'] * $item['qty'];
+        $cartModel = new Cart($pdo);
+        $cart = $cartModel->findByUser($userId);
+        if (!$cart) {
+            return 0;
         }
 
-        return $subtotal;
+        $cartItemModel = new CartItem($pdo);
+        return $cartItemModel->countQty((int) $cart['id']);
+    }
+
+    public static function subtotal(?PDO $pdo = null, ?int $userId = null): float
+    {
+        if (!$pdo || !$userId) {
+            return 0;
+        }
+
+        $cartModel = new Cart($pdo);
+        $cart = $cartModel->findByUser($userId);
+        if (!$cart) {
+            return 0;
+        }
+
+        $cartItemModel = new CartItem($pdo);
+        return $cartItemModel->subtotal((int) $cart['id']);
     }
 }

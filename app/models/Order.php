@@ -19,14 +19,7 @@ class Order extends BaseModel
 
     public function detail(int $id): ?array
     {
-        $stmt = $this->db->prepare("
-            SELECT o.*, u.name AS user_name, u.email, a.recipient_name, a.phone, a.address_line, a.city, a.province, a.postal_code
-            FROM orders o
-            JOIN users u ON u.id = o.user_id
-            JOIN addresses a ON a.id = o.address_id
-            WHERE o.id = ?
-            LIMIT 1
-        ");
+        $stmt = $this->db->prepare("\n            SELECT o.*,\n                   u.name AS user_name,\n                   u.email,\n                   COALESCE(o.recipient_name_snapshot, a.recipient_name) AS recipient_name,\n                   COALESCE(o.phone_snapshot, a.phone) AS phone,\n                   COALESCE(o.address_line_snapshot, a.address_line) AS address_line,\n                   COALESCE(o.city_snapshot, a.city) AS city,\n                   COALESCE(o.province_snapshot, a.province) AS province,\n                   COALESCE(o.postal_code_snapshot, a.postal_code) AS postal_code\n            FROM orders o\n            JOIN users u ON u.id = o.user_id\n            LEFT JOIN addresses a ON a.id = o.address_id\n            WHERE o.id = ?\n            LIMIT 1\n        ");
         $stmt->execute([$id]);
         return $stmt->fetch() ?: null;
     }
@@ -41,14 +34,7 @@ class Order extends BaseModel
         $countStmt->execute($params);
         $total = (int) $countStmt->fetch()['total'];
 
-        $stmt = $this->db->prepare("
-            SELECT o.*, u.name AS user_name
-            FROM orders o
-            JOIN users u ON u.id = o.user_id
-            $where
-            ORDER BY o.id DESC
-            LIMIT $limit OFFSET $offset
-        ");
+        $stmt = $this->db->prepare("\n            SELECT o.*, u.name AS user_name\n            FROM orders o\n            JOIN users u ON u.id = o.user_id\n            $where\n            ORDER BY o.id DESC\n            LIMIT $limit OFFSET $offset\n        ");
         $stmt->execute($params);
 
         return [
