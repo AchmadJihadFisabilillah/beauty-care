@@ -2,7 +2,7 @@
 
 <footer class="site-footer">
     <div class="container footer-wrap">
-        <p>© <?= date('Y') ?> Glowé. All rights reserved.</p>
+        <p>© <?= date('Y') ?> Beauty caré. All rights reserved.</p>
     </div>
 </footer>
 
