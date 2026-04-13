@@ -21,7 +21,7 @@
         </nav>
 
         <div class="nav-icons">
-            <a href="<?= BASE_URL ?>/catalog" title="Wishlist">♡</a>
+            <a href="<?= BASE_URL ?>/register" title="register">Register</a>
 
             <?php if (is_logged_in()): ?>
                 <a href="<?= BASE_URL ?>/user/dashboard" title="Account">👤</a>
