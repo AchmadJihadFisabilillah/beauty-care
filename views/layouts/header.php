@@ -29,8 +29,8 @@
                     <a href="<?= BASE_URL ?>/admin/dashboard">Admin</a>
                 <?php endif; ?>
             <?php else: ?>
+                <a href="<?= BASE_URL ?>/register"><i class="fa-solid fa-user-plus"></i></a>
                 <a href="<?= BASE_URL ?>/login" title="Account" ><i class="fa-regular fa-user"></i></a>
-                <a href="<?= BASE_URL ?>/register">Register</a>
             <?php endif; ?>
             <a href="<?= BASE_URL ?>/cart" title="Keranjang"><i class="fa-solid fa-bag-shopping"></i></a>
         </div>
