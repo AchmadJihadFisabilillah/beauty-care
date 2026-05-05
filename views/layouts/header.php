@@ -16,10 +16,8 @@
 
         <nav class="nav-center">
             <a href="<?= BASE_URL ?>/">Home</a>
-            <a href="<?= BASE_URL ?>/catalog">Products</a>
-            <a href="<?= BASE_URL ?>/blog">Blog</a>
-            <a href="#contact">Contact</a>
-        </nav>
+            <a href="<?= BASE_URL ?>/#catalog" class="nav-link">Catalog</a>
+            <a href="<?= BASE_URL ?>/cart">Cart (<?= cart_count() ?>)</a>
 
         <div class="nav-icons">
             <?php if (is_logged_in()): ?>
