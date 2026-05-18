@@ -16,8 +16,10 @@
 
         <nav class="nav-center">
             <a href="<?= BASE_URL ?>/">Home</a>
-            <a href="<?= BASE_URL ?>/#catalog" class="nav-link">Catalog</a>
-            <a href="<?= BASE_URL ?>/cart">Cart (<?= cart_count() ?>)</a>
+            <a href="<?= BASE_URL ?>/products" class="nav-link">product</a>
+            <a href="<?= BASE_URL ?>/blog" class="nav-link">Blog</a>
+            <a href="<?= BASE_URL ?>/layouts/footer" class="nav-link">contact me</a>
+        </nav>
 
         <div class="nav-icons">
             <?php if (is_logged_in()): ?>
@@ -30,7 +32,7 @@
                 <a href="<?= BASE_URL ?>/register"><i class="fa-solid fa-user-plus"></i></a>
                 <a href="<?= BASE_URL ?>/login" title="Account" ><i class="fa-regular fa-user"></i></a>
             <?php endif; ?>
-            <a href="<?= BASE_URL ?>/cart" title="Keranjang"><i class="fa-solid fa-bag-shopping"></i></a>
+            <a href="<?= BASE_URL ?>/cart" title="Keranjang"><i class="fa-solid fa-bag-shopping"></i> (<?= cart_count() ?>)</a>
         </div>
     </div>
 </header>

@@ -63,12 +63,15 @@ img{
 .topbar.clean-navbar{
   min-height:82px;
   display:grid;
-  grid-template-columns:180px 1fr 180px;
+  grid-template-columns:220px 1fr 220px;
+  grid-template-areas:"brand nav icons";
   align-items:center;
   gap:20px;
 }
 
 .brand{
+  grid-area:brand;
+  justify-self:start;
   font-size:2rem;
   font-weight:800;
   color:var(--primary);
@@ -81,6 +84,7 @@ img{
 }
 
 .nav-center{
+  grid-area:nav;
   display:flex;
   align-items:center;
   justify-content:center;
@@ -100,6 +104,8 @@ img{
 }
 
 .nav-icons{
+  grid-area:icons;
+  justify-self:end;
   display:flex;
   justify-content:flex-end;
   align-items:center;
@@ -788,9 +794,18 @@ p{
 @media (max-width:1100px){
   .topbar.clean-navbar{
     grid-template-columns:1fr;
+    grid-template-areas:
+      "brand"
+      "nav"
+      "icons";
     justify-items:center;
     gap:14px;
     padding:14px 0;
+  }
+
+  .brand,
+  .nav-icons{
+    justify-self:center;
   }
 
   .nav-center,
