@@ -9,30 +9,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'delete') {
         $id = (int) ($_POST['id'] ?? 0);
 
-        $stmt = $pdo->prepare('SELECT image FROM products WHERE id = ? LIMIT 1');
-        $stmt->execute([$id]);
-        $product = $stmt->fetch();
+        // 1. CEK APAKAH PRODUK SEDANG DALAM PESANAN AKTIF
+        // Pastikan status ini sama persis dengan yang ada di database kamu
+        $checkStmt = $pdo->prepare("
+            SELECT COUNT(oi.id) 
+            FROM order_items oi
+            JOIN orders o ON oi.order_id = o.id
+            WHERE oi.product_id = ? 
+            AND o.order_status NOT IN ('completed', 'canceled', 'rejected')
+        ");
+        $checkStmt->execute([$id]);
+        $activeOrderCount = $checkStmt->fetchColumn();
 
-        if ($product) {
-            if (!empty($product['image'])) {
-                delete_file_if_exists(UPLOAD_PRODUCT_DIR . $product['image']);
+        // 2. TAMPILKAN NOTIFIKASI JIKA PRODUK LAGI ADA YANG PESAN
+        if ($activeOrderCount > 0) {
+            flash('error', 'Gagal dihapus: Produk tersebut lagi ada yang pesan dan transaksinya belum selesai.');
+            redirect('/admin/products');
+            exit; 
+        }
+
+        // Jika aman (tidak ada pesanan aktif), lanjutkan hapus paksa
+        try {
+            $stmt = $pdo->prepare('SELECT image FROM products WHERE id = ? LIMIT 1');
+            $stmt->execute([$id]);
+            $product = $stmt->fetch();
+
+            if ($product) {
+                $galleryStmt = $pdo->prepare('SELECT image FROM product_images WHERE product_id = ?');
+                $galleryStmt->execute([$id]);
+                $galleryImages = $galleryStmt->fetchAll();
+
+                // Matikan pengecekan perlindungan Foreign Key sementara
+                $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
+
+                // Eksekusi hapus produk secara paksa
+                $pdo->prepare('DELETE FROM products WHERE id = ?')->execute([$id]);
+
+                // Nyalakan kembali perlindungan database
+                $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
+
+                // Hapus file gambar secara fisik
+                if (!empty($product['image'])) {
+                    delete_file_if_exists(UPLOAD_PRODUCT_DIR . $product['image']);
+                }
+
+                foreach ($galleryImages as $img) {
+                    delete_file_if_exists(UPLOAD_PRODUCT_DIR . $img['image']);
+                }
+
+                admin_log('Delete product', ['product_id' => $id]);
+                flash('success', 'Produk berhasil dihapus permanen.');
             }
-
-            $galleryStmt = $pdo->prepare('SELECT image FROM product_images WHERE product_id = ?');
-            $galleryStmt->execute([$id]);
-            $galleryImages = $galleryStmt->fetchAll();
-
-            foreach ($galleryImages as $img) {
-                delete_file_if_exists(UPLOAD_PRODUCT_DIR . $img['image']);
-            }
-
-            $pdo->prepare('DELETE FROM products WHERE id = ?')->execute([$id]);
-            admin_log('Delete product', ['product_id' => $id]);
-            admin_log('Menghapus brand', ['id' => $id]);
-            flash('success', 'Produk berhasil dihapus.');
+        } catch (PDOException $e) {
+            // Pastikan pelindung database tetap dinyalakan jika terjadi error lain
+            $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
+            flash('error', 'Terjadi kesalahan sistem saat menghapus: ' . $e->getMessage());
         }
 
         redirect('/admin/products');
+        exit;
     }
 }
 
@@ -112,11 +147,12 @@ require BASE_PATH . '/views/layouts/admin_header.php';
                     <a href="<?= BASE_URL ?>/admin/products/edit?id=<?= $product['id'] ?>">Edit</a> |
                     <a href="<?= BASE_URL ?>/admin/products/stock?id=<?= $product['id'] ?>">Stok</a> |
                     <a href="<?= BASE_URL ?>/admin/products/gallery?id=<?= $product['id'] ?>">Gallery</a>
-                    <form method="post" class="inline-form" style="display:inline-flex">
+                    
+                    <form method="post" class="inline-form" style="display:inline-flex" onsubmit="return confirm('Yakin ingin menghapus produk ini secara permanen?');">
                         <?= csrf_input() ?>
                         <input type="hidden" name="action" value="delete">
                         <input type="hidden" name="id" value="<?= $product['id'] ?>">
-                        <button class="btn btn-danger btn-sm" data-confirm="Hapus produk ini?">Hapus</button>
+                        <button type="submit" class="btn btn-danger btn-sm">Hapus</button>
                     </form>
                 </td>
             </tr>

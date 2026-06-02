@@ -37,4 +37,36 @@ class User extends BaseModel
     {
         return $this->db->query("SELECT * FROM users WHERE role = 'user' ORDER BY id DESC")->fetchAll();
     }
+
+    public function saveResetToken(string $email, string $tokenHash, string $expiresAt): bool
+{
+    $stmt = $this->db->prepare(
+        'UPDATE users SET reset_token = ?, reset_expires_at = ? WHERE email = ? LIMIT 1'
+    );
+
+    return $stmt->execute([$tokenHash, $expiresAt, $email]);
+}
+
+    public function findByValidResetToken(string $token): ?array
+{
+    $tokenHash = hash('sha256', $token);
+
+    $stmt = $this->db->prepare(
+        'SELECT * FROM users WHERE reset_token = ? AND reset_expires_at >= NOW() LIMIT 1'
+    );
+
+    $stmt->execute([$tokenHash]);
+
+    return $stmt->fetch() ?: null;
+}
+
+    public function updatePassword(int $id, string $hashedPassword): bool
+{
+    $stmt = $this->db->prepare(
+        'UPDATE users SET password = ?, reset_token = NULL, reset_expires_at = NULL WHERE id = ? LIMIT 1'
+    );
+
+    return $stmt->execute([$hashedPassword, $id]);
+}
+
 }

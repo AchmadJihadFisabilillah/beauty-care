@@ -2,7 +2,7 @@
     <div class="container footer-wrap">
         <div class="footer-grid">
             <div class="footer-col">
-                <h3>Glowé</h3>
+                <h3>Beauty Care</h3>
                 <p>
                     Skincare berkualitas dengan bahan alami untuk membantu kulit tampil sehat,
                     cerah, dan glowing setiap hari.

@@ -13,7 +13,7 @@ require_admin();
 <body>
 <div class="admin-layout">
     <aside class="admin-sidebar">
-        <h2>Glowé Admin</h2>
+        <h2>Beauty Care</h2>
         <a href="<?= BASE_URL ?>/admin/dashboard">Dashboard</a>
         <a href="<?= BASE_URL ?>/admin/products">Products</a>
         <a href="<?= BASE_URL ?>/admin/brands">Brands</a>

@@ -30,6 +30,9 @@ require BASE_PATH . '/views/layouts/header.php';
     <label>Password
         <input type="password" name="password" required>
     </label>
+    <p style="margin:0">
+        <a href="<?= BASE_URL ?>/forgot-password">Lupa Password?</a>
+    </p>
     <button class="btn">Login</button>
 </form>
 <?php require BASE_PATH . '/views/layouts/footer.php'; ?>
