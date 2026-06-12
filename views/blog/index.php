@@ -139,7 +139,7 @@ $posts = [
                        data-title="<?= e($post['title']) ?>"
                        data-image="<?= e($post['image']) ?>"
                        data-content="<?= e($post['content']) ?>">
-                        Read More
+                        Baca Selengkapnya
                     </a>
                 </div>
             </article>
