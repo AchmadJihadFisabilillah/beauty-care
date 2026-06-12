@@ -33,27 +33,35 @@ $allowedStatus = ['new', 'processed', 'shipped', 'in_transit', 'completed', 'can
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
 
-    $orderStatus = trim($_POST['order_status'] ?? $order['order_status']);
+    $orderStatus    = trim($_POST['order_status'] ?? $order['order_status']);
     $trackingNumber = trim($_POST['tracking_number'] ?? '');
+    $courier        = trim($_POST['courier'] ?? '');
+    $shippingCost   = (float) ($_POST['shipping_cost'] ?? $order['shipping_cost']);
 
     if (!in_array($orderStatus, $allowedStatus, true)) {
         flash('error', 'Status order tidak valid.');
         redirect('/admin/order-detail?id=' . $id);
     }
 
+    // Recalculate total based on new shipping cost
+    $subtotalVal = (float) ($order['subtotal'] ?? 0);
+    $newTotal    = $subtotalVal + $shippingCost;
+
     $pdo->prepare('
         UPDATE orders 
-        SET order_status = ?, tracking_number = ?
+        SET order_status = ?, tracking_number = ?, courier = ?, shipping_cost = ?, total = ?
         WHERE id = ?
-    ')->execute([$orderStatus, $trackingNumber, $id]);
+    ')->execute([$orderStatus, $trackingNumber, $courier ?: null, $shippingCost, $newTotal, $id]);
 
-    admin_log('Update status pesanan dan resi', [
-        'order_id' => $id,
-        'status' => $orderStatus,
-        'tracking_number' => $trackingNumber
+    admin_log('Update status, resi, kurir & ongkir pesanan', [
+        'order_id'        => $id,
+        'status'          => $orderStatus,
+        'tracking_number' => $trackingNumber,
+        'courier'         => $courier,
+        'shipping_cost'   => $shippingCost,
     ]);
 
-    flash('success', 'Status order dan nomor resi diperbarui.');
+    flash('success', 'Data pesanan berhasil diperbarui.');
     redirect('/admin/order-detail?id=' . $id);
 }
 
@@ -61,12 +69,10 @@ $itemStmt = $pdo->prepare('SELECT * FROM order_items WHERE order_id = ?');
 $itemStmt->execute([$id]);
 $items = $itemStmt->fetchAll();
 
-$subtotal = (float) ($order['subtotal'] ?? 0);
-$shippingCost = (float) ($order['shipping_cost'] ?? 0);
-$total = (float) ($order['total'] ?? 0);
-
-$courier = $order['courier'] ?? '';
-$shippingService = $order['shipping_service'] ?? '';
+$subtotal      = (float) ($order['subtotal'] ?? 0);
+$shippingCost  = (float) ($order['shipping_cost'] ?? 0);
+$total         = (float) ($order['total'] ?? 0);
+$courier       = $order['courier'] ?? '';
 $trackingNumber = $order['tracking_number'] ?? '';
 
 require BASE_PATH . '/views/layouts/admin_header.php';
@@ -91,9 +97,8 @@ require BASE_PATH . '/views/layouts/admin_header.php';
     <hr>
 
     <p><strong>Subtotal:</strong> <?= rupiah($subtotal) ?></p>
-    <p><strong>Kurir:</strong> <?= $courier ? e(strtoupper($courier)) : '-' ?></p>
-    <p><strong>Layanan:</strong> <?= $shippingService ? e($shippingService) : '-' ?></p>
-    <p><strong>No Resi:</strong> <?= $trackingNumber ? e($trackingNumber) : '-' ?></p>
+    <p><strong>Kurir:</strong> <?= $courier ? e(strtoupper($courier)) : '<em style="color:#94a3b8;">Belum diisi</em>' ?></p>
+    <p><strong>No Resi:</strong> <?= $trackingNumber ? e($trackingNumber) : '<em style="color:#94a3b8;">Belum diisi</em>' ?></p>
     <p><strong>Ongkir:</strong> <?= rupiah($shippingCost) ?></p>
     <p><strong>Total Bayar:</strong> <?= rupiah($total) ?></p>
 
@@ -166,7 +171,7 @@ require BASE_PATH . '/views/layouts/admin_header.php';
 </div>
 
 <div class="card">
-    <h3>Update Status Order & Resi</h3>
+    <h3>Update Status, Pengiriman & Resi</h3>
 
     <form method="post" class="form-grid">
         <?= csrf_input() ?>
@@ -181,16 +186,37 @@ require BASE_PATH . '/views/layouts/admin_header.php';
             </select>
         </label>
 
+        <label>Kurir / Jasa Pengiriman
+            <input
+                type="text"
+                name="courier"
+                value="<?= e($courier) ?>"
+                placeholder="Contoh: JNE, J&T, AnterAja"
+            >
+        </label>
+
         <label>Nomor Resi
             <input
-                type="text" 
-                name="tracking_number" 
-                value="<?= e($trackingNumber) ?>" 
+                type="text"
+                name="tracking_number"
+                value="<?= e($trackingNumber) ?>"
                 placeholder="Contoh: JNE1234567890"
             >
         </label>
 
-        <button class="btn">Update</button>
+        <label>Ongkos Kirim (Rp)
+            <input
+                type="number"
+                name="shipping_cost"
+                value="<?= (int) $shippingCost ?>"
+                min="0"
+                step="1000"
+                placeholder="0"
+            >
+            <small style="color:#64748b;">Subtotal: <?= rupiah($subtotal) ?> — Total akan dihitung otomatis.</small>
+        </label>
+
+        <button class="btn">Update Pesanan</button>
     </form>
 </div>
 

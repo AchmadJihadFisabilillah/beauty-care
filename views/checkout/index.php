@@ -30,21 +30,19 @@ if (!$addresses) {
     redirect('/user/addresses');
 }
 
+// Load all active shipping rates for JS lookup
+$shippingRatesRaw = $pdo->query('SELECT * FROM shipping_rates WHERE is_active = 1 ORDER BY city ASC')->fetchAll(PDO::FETCH_ASSOC);
+$shippingRatesJson = json_encode($shippingRatesRaw, JSON_UNESCAPED_UNICODE);
+
 $subtotal = cart_subtotal();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
 
-    $addressId = (int) ($_POST['address_id'] ?? 0);
-    $courier = trim($_POST['courier'] ?? '');
-    $service = trim($_POST['service'] ?? '');
-    $shippingCost = (float) ($_POST['shipping_cost'] ?? 0);
+    $addressId    = (int) ($_POST['address_id'] ?? 0);
     $paymentMethod = trim($_POST['payment_method'] ?? 'bank_transfer');
-    $notes = trim($_POST['notes'] ?? '');
-
-    if ($courier === '' || $service === '' || $shippingCost <= 0) {
-        die('Ongkir tidak valid.');
-    }
+    $notes        = trim($_POST['notes'] ?? '');
+    $shippingCost = (float) ($_POST['shipping_cost'] ?? 0);
 
     if (!in_array($paymentMethod, ['bank_transfer', 'ewallet', 'qris', 'cod'], true)) {
         flash('error', 'Metode pembayaran tidak valid.');
@@ -58,6 +56,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$address) {
         die('Alamat tidak valid.');
     }
+
+    // Try to find ongkir from shipping_rates by city
+    $cityLower = strtolower(trim($address['city']));
+    $rateStmt = $pdo->prepare('SELECT cost FROM shipping_rates WHERE LOWER(TRIM(city)) = ? AND is_active = 1 LIMIT 1');
+    $rateStmt->execute([$cityLower]);
+    $rateRow = $rateStmt->fetch();
+    if ($rateRow) {
+        $shippingCost = (float) $rateRow['cost'];
+    }
+    // If no match, use posted value (may be 0 — admin will adjust later)
 
     foreach ($items as $cartItem) {
         $stockStmt = $pdo->prepare('SELECT stock, is_active FROM products WHERE id = ? LIMIT 1');
@@ -115,8 +123,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $address['postal_code'],
             $subtotal,
             $shippingCost,
-            strtoupper($courier),
-            $service,
+            null, // courier — admin will fill later
+            null, // shipping_service — admin will fill later
             $total,
             $paymentMethod,
             'pending',
@@ -185,40 +193,30 @@ require BASE_PATH . '/views/layouts/header.php';
 
 <h1>Checkout</h1>
 
-<form method="post" class="card form-grid">
+<form method="post" class="card form-grid" id="checkoutForm">
     <?= csrf_input() ?>
 
     <label>Pilih Alamat
         <select name="address_id" id="address_id" required>
             <?php foreach ($addresses as $address): ?>
-                <option value="<?= $address['id'] ?>">
-                    <?= e($address['recipient_name']) ?> - <?= e($address['city']) ?>, <?= e($address['province']) ?>
+                <option
+                    value="<?= $address['id'] ?>"
+                    data-city="<?= e(strtolower(trim($address['city']))) ?>"
+                >
+                    <?= e($address['recipient_name']) ?> — <?= e($address['city']) ?>, <?= e($address['province']) ?>
                 </option>
             <?php endforeach; ?>
         </select>
     </label>
 
-    <label>Jasa Pengiriman
-        <select id="courier" name="courier" required>
-            <option value="">Pilih Jasa Pengiriman</option>
-            <option value="jne">JNE</option>
-            <option value="jnt">J&T Express</option>
-            <option value="anteraja">AnterAja</option>
-            <option value="pos">POS Indonesia</option>
-        </select>
-    </label>
-
-    <label>Layanan Pengiriman
-        <select id="service" name="service" required>
-            <option value="">Pilih kurir terlebih dahulu</option>
-        </select>
-    </label>
-
     <label>Ongkos Kirim
-        <input type="text" id="shipping_cost_display" readonly value="Rp0">
+        <input type="text" id="shipping_cost_display" readonly placeholder="Otomatis dari data kota">
     </label>
-
     <input type="hidden" name="shipping_cost" id="shipping_cost_value" value="0">
+
+    <small id="ongkir_note" style="color:#64748b;margin-top:-10px;display:block;">
+        Ongkir dihitung otomatis. Jika kota belum tercakup, admin akan menyesuaikan setelah pesanan dibuat.
+    </small>
 
     <label>Metode Pembayaran
         <select name="payment_method" required>
@@ -259,7 +257,7 @@ require BASE_PATH . '/views/layouts/header.php';
 
         <div class="checkout-total">
             <p>Subtotal: <strong><?= rupiah($subtotal) ?></strong></p>
-            <p>Ongkir: <strong id="ongkirText">Rp0</strong></p>
+            <p>Ongkir: <strong id="ongkirText">—</strong></p>
             <hr>
             <h3>Total Bayar: <strong id="grandTotalText"><?= rupiah($subtotal) ?></strong></h3>
         </div>
@@ -272,97 +270,54 @@ require BASE_PATH . '/views/layouts/header.php';
 
 <script>
 const addressSelect = document.getElementById('address_id');
-const courier = document.getElementById('courier');
-const service = document.getElementById('service');
 const shippingDisplay = document.getElementById('shipping_cost_display');
-const shippingValue = document.getElementById('shipping_cost_value');
-const subtotal = parseInt(document.getElementById('subtotal').value || 0);
-const ongkirText = document.getElementById('ongkirText');
+const shippingValue  = document.getElementById('shipping_cost_value');
+const ongkirText     = document.getElementById('ongkirText');
 const grandTotalText = document.getElementById('grandTotalText');
+const subtotal       = parseInt(document.getElementById('subtotal').value || 0);
+const ongkirNote     = document.getElementById('ongkir_note');
+
+// Shipping rates from PHP (array of {id, label, city, cost})
+const shippingRates = <?= $shippingRatesJson ?>;
 
 function formatRupiah(number) {
     return 'Rp' + Number(number).toLocaleString('id-ID');
 }
 
-function resetShipping() {
-    service.innerHTML = '<option value="">Pilih kurir terlebih dahulu</option>';
-    shippingDisplay.value = 'Rp0';
-    shippingValue.value = 0;
-    ongkirText.textContent = 'Rp0';
-    grandTotalText.textContent = formatRupiah(subtotal);
+function updateOngkir() {
+    const selectedOption = addressSelect.options[addressSelect.selectedIndex];
+    const city = (selectedOption ? selectedOption.dataset.city || '' : '').trim().toLowerCase();
+
+    // Normalize: remove 'kota ', 'kabupaten ', 'kab. ' prefix for matching
+    const cityNorm = city.replace(/^(kota |kabupaten |kab\. )/i, '').trim();
+
+    const rate = shippingRates.find(r => {
+        const rc = r.city.trim().toLowerCase().replace(/^(kota |kabupaten |kab\. )/i, '');
+        return rc === cityNorm || rc === city;
+    });
+
+    if (rate) {
+        const cost = parseFloat(rate.cost);
+        shippingDisplay.value = formatRupiah(cost);
+        shippingValue.value   = cost;
+        ongkirText.textContent = formatRupiah(cost);
+        grandTotalText.textContent = formatRupiah(subtotal + cost);
+        ongkirNote.textContent = 'Ongkir dihitung berdasarkan kota tujuan.';
+        ongkirNote.style.color = '#16a34a';
+    } else {
+        shippingDisplay.value = 'Belum tersedia';
+        shippingValue.value   = 0;
+        ongkirText.textContent = 'Ditentukan admin';
+        grandTotalText.textContent = formatRupiah(subtotal);
+        ongkirNote.textContent = 'Ongkir untuk kota ini akan ditentukan oleh admin setelah pesanan dibuat.';
+        ongkirNote.style.color = '#f59e0b';
+    }
 }
 
-courier.addEventListener('change', function () {
-    const courierValue = courier.value;
-    const addressId = addressSelect.value;
+// Run on page load
+updateOngkir();
 
-    resetShipping();
-
-    if (!courierValue || !addressId) {
-        return;
-    }
-
-    service.innerHTML = '<option value="">Memuat layanan...</option>';
-
-    const formData = new FormData();
-    formData.append('address_id', addressId);
-    formData.append('courier', courierValue);
-
-    fetch('<?= BASE_URL ?>/api/check-ongkir.php', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(result => {
-        service.innerHTML = '<option value="">Pilih Layanan</option>';
-
-        if (!result.success) {
-            alert(result.message || 'Gagal mengambil ongkir.');
-            return;
-        }
-
-        const costs = result.data || [];
-
-        if (costs.length === 0) {
-            service.innerHTML = '<option value="">Layanan tidak tersedia</option>';
-            return;
-        }
-
-        costs.forEach(item => {
-            const option = document.createElement('option');
-
-            const serviceName = item.service || item.name || item.code || 'Layanan';
-            const description = item.description ? ' - ' + item.description : '';
-            const etd = item.etd ? ' (' + item.etd + ' hari)' : '';
-            const cost = parseInt(item.cost || item.price || item.value || 0);
-
-            option.value = serviceName + description + etd;
-            option.dataset.cost = cost;
-            option.textContent = serviceName + description + etd + ' - ' + formatRupiah(cost);
-
-            service.appendChild(option);
-        });
-    })
-    .catch(() => {
-        service.innerHTML = '<option value="">Gagal memuat ongkir</option>';
-        alert('Gagal menghubungi API ongkir.');
-    });
-});
-
-addressSelect.addEventListener('change', function () {
-    courier.value = '';
-    resetShipping();
-});
-
-service.addEventListener('change', function () {
-    const selectedOption = this.options[this.selectedIndex];
-    const cost = parseInt(selectedOption.dataset.cost || 0);
-
-    shippingDisplay.value = formatRupiah(cost);
-    shippingValue.value = cost;
-    ongkirText.textContent = formatRupiah(cost);
-    grandTotalText.textContent = formatRupiah(subtotal + cost);
-});
+addressSelect.addEventListener('change', updateOngkir);
 </script>
 
 <?php require BASE_PATH . '/views/layouts/footer.php'; ?>

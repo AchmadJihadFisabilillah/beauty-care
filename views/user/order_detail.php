@@ -233,13 +233,19 @@ require BASE_PATH . '/views/layouts/header.php';
     <hr>
 
     <h3>Informasi Pengiriman</h3>
-    <p>Kurir: <strong><?= $courier ? e(strtoupper($courier)) : '-' ?></strong></p>
-    <p>Layanan: <strong><?= $shippingService ? e($shippingService) : '-' ?></strong></p>
 
     <?php if ($orderStatus === 'cancelled'): ?>
         <p>No Resi: <strong>Tidak tersedia karena pesanan dibatalkan.</strong></p>
     <?php else: ?>
-        <p>No Resi: <strong><?= $trackingNumber ? e($trackingNumber) : 'Belum tersedia, pesanan belum dikirim.' ?></strong></p>
+        <?php if (!empty($courier)): ?>
+            <p>Kurir: <strong><?= e(strtoupper($courier)) ?></strong></p>
+        <?php endif; ?>
+
+        <p>No Resi:
+            <strong>
+                <?= $trackingNumber ? e($trackingNumber) : 'Belum tersedia, pesanan sedang diproses.' ?>
+            </strong>
+        </p>
 
         <?php if ($trackingNumber && $trackingUrl): ?>
             <p>
@@ -254,7 +260,11 @@ require BASE_PATH . '/views/layouts/header.php';
         <?php endif; ?>
     <?php endif; ?>
 
-    <p>Ongkos Kirim: <strong><?= rupiah($shippingCost) ?></strong></p>
+    <p>Ongkos Kirim:
+        <strong>
+            <?= $shippingCost > 0 ? rupiah($shippingCost) : '<em style="color:#f59e0b;">Sedang dikonfirmasi admin</em>' ?>
+        </strong>
+    </p>
 
     <hr>
 

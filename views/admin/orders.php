@@ -69,9 +69,9 @@ require BASE_PATH . '/views/layouts/admin_header.php';
         <tr>
             <th>Invoice</th>
             <th>User</th>
-            <th>Kurir</th>
             <th>Ongkir</th>
             <th>Total</th>
+            <th>Resi</th>
             <th>Order Status</th>
             <th>Payment</th>
             <th>Aksi</th>
@@ -83,16 +83,18 @@ require BASE_PATH . '/views/layouts/admin_header.php';
             <tr>
                 <td><?= e($order['order_code']) ?></td>
                 <td><?= e($order['user_name']) ?></td>
-                <td>
-                    <?= !empty($order['courier']) ? e(strtoupper($order['courier'])) : '-' ?>
-
-                    <?php if (!empty($order['shipping_service'])): ?>
-                        <br>
-                        <small><?= e($order['shipping_service']) ?></small>
-                    <?php endif; ?>
-                </td>
                 <td><?= rupiah($order['shipping_cost'] ?? 0) ?></td>
                 <td><?= rupiah($order['total']) ?></td>
+                <td>
+                    <?php if (!empty($order['tracking_number'])): ?>
+                        <span style="font-family:monospace;font-size:13px;"><?= e($order['tracking_number']) ?></span>
+                        <?php if (!empty($order['courier'])): ?>
+                            <br><small style="color:#64748b;"><?= e(strtoupper($order['courier'])) ?></small>
+                        <?php endif; ?>
+                    <?php else: ?>
+                        <em style="color:#94a3b8;">Belum ada resi</em>
+                    <?php endif; ?>
+                </td>
                 <td><?= order_status_badge($order['order_status']) ?></td>
                 <td><?= order_status_badge($order['payment_status']) ?></td>
                 <td>
