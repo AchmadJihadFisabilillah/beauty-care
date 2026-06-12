@@ -53,12 +53,16 @@ require BASE_PATH . '/views/layouts/header.php';
         <article class="card product-card">
             <?php if ($product['image']): ?>
                 <img class="product-thumb" src="<?= BASE_URL ?>/uploads/products/<?= e($product['image']) ?>" alt="<?= e($product['name']) ?>">
+            <?php else: ?>
+                <img class="product-thumb" src="<?= BASE_URL ?>/assets/img/1.jpg" alt="<?= e($product['name']) ?>">
             <?php endif; ?>
             <h3><?= e($product['name']) ?></h3>
-            <p><?= e($product['brand_name']) ?></p>
-            <p><?= e(mb_strimwidth(strip_tags($product['description']), 0, 80, '...')) ?></p>
-            <strong><?= rupiah($product['price']) ?></strong>
-            <a class="btn btn-outline" href="<?= BASE_URL ?>/product?slug=<?= e($product['slug']) ?>">Detail</a>
+            <p class="product-brand"><?= e($product['brand_name']) ?></p>
+            <p class="product-desc"><?= e(mb_strimwidth(strip_tags($product['description']), 0, 80, '...')) ?></p>
+            <strong class="product-price"><?= rupiah($product['price']) ?></strong>
+            <div class="product-action">
+                <a class="btn btn-outline product-link" href="<?= BASE_URL ?>/product?slug=<?= e($product['slug']) ?>">Detail</a>
+            </div>
         </article>
     <?php endforeach; ?>
 </div>

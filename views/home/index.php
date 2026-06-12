@@ -154,10 +154,10 @@ require BASE_PATH . '/views/layouts/header.php';
 
                 <h3><?= e($product['name']) ?></h3>
                 <p class="product-brand"><?= e($product['brand_name']) ?></p>
-                <p><?= e(mb_strimwidth(strip_tags($product['description']), 0, 90, '...')) ?></p>
-                <strong><?= rupiah($product['price']) ?></strong>
+                <p class="product-desc"><?= e(mb_strimwidth(strip_tags($product['description']), 0, 90, '...')) ?></p>
+                <strong class="product-price"><?= rupiah($product['price']) ?></strong>
 
-                <div style="margin-top:14px;">
+                <div class="product-action">
                     <a class="btn btn-outline product-link" href="<?= BASE_URL ?>/product?slug=<?= e($product['slug']) ?>">
                         Detail
                     </a>
