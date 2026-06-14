@@ -1,3 +1,5 @@
+</main>
+
 <footer class="site-footer" id="contact">
     <div class="container footer-wrap">
         <div class="footer-grid">
