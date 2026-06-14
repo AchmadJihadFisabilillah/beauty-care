@@ -47,7 +47,13 @@ require BASE_PATH . '/views/layouts/admin_header.php';
             <p><strong>Waktu verifikasi:</strong> <?= e($row['verified_at']) ?></p>
         <?php endif; ?>
         <?php if ($row['proof_image']): ?>
-            <img class="proof-thumb" src="<?= BASE_URL ?>/uploads/payments/<?= e($row['proof_image']) ?>" alt="proof">
+            <?php
+    $proofSrc = str_starts_with($row['proof_image'], 'http')
+        ? $row['proof_image']
+        : BASE_URL . '/uploads/payments/' . $row['proof_image'];
+?>
+
+<img class="proof-thumb" src="<?= e($proofSrc) ?>" alt="proof">
         <?php endif; ?>
         <form method="post" class="form-grid compact">
             <?= csrf_input() ?>
