@@ -12,6 +12,7 @@ $routes = [
     '/forgot-password' => ['view' => 'auth/forgot-password'],
     '/reset-password' => ['view' => 'auth/reset_password'],
     '/logout' => ['action' => 'logout'],
+    '/contact' => ['view' => 'help/contact'],
 
     '/user/dashboard' => ['view' => 'user/dashboard'],
     '/user/addresses' => ['view' => 'user/addresses'],

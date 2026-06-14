@@ -18,7 +18,7 @@
             <a href="<?= BASE_URL ?>/">Home</a>
             <a href="<?= BASE_URL ?>/products" class="nav-link">product</a>
             <a href="<?= BASE_URL ?>/blog" class="nav-link">Blog</a>
-            <a href="<?= BASE_URL ?>/contact " class="nav-link">Help</a>
+            <a href="<?= BASE_URL ?>/contact" class="nav-link">Help</a>
         </nav>
 
         <div class="nav-icons">
